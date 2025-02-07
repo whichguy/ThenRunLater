@@ -1,0 +1,999 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <!-- Bootstrap 5 CSS (via CDN) -->
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+    />
+    <style>
+      .tree-group {
+        margin-left: 1em;
+        padding-left: 1em;
+        border-left: 2px dotted #ccc;
+      }
+      .toggle-header:hover {
+        text-decoration: underline;
+        cursor: pointer;
+      }
+      .hidden {
+        display: none !important;
+      }
+      .expand-icon {
+        display: inline-block;
+        width: 1em;
+        text-align: center;
+      }
+      .toast-container {
+        z-index: 9999;
+      }
+    </style>
+  </head>
+  <body class="bg-light">
+    <div class="container my-4">
+      <h1>Job Scheduler Dashboard</h1>
+
+      <!-- User Role Info -->
+      <div id="userRoleInfo" class="alert alert-secondary"></div>
+
+      <!-- SEARCH FIELD for queue -->
+      <div class="mb-3">
+        <label for="searchInput" class="form-label">Search Filter (Jobs):</label>
+        <input
+          type="text"
+          class="form-control"
+          id="searchInput"
+          placeholder="Type to filter jobs..."
+        />
+      </div>
+
+      <hr />
+
+      <!-- Collapsible Tree Container for pending jobs -->
+      <div class="d-flex align-items-center mb-2">
+        <h2 class="flex-grow-1 mb-0">Pending Jobs (Collapsible Tree)</h2>
+        <button
+          id="expandAllBtn"
+          class="btn btn-link btn-sm text-decoration-none me-2"
+        >
+          Expand All
+        </button>
+        <button
+          id="collapseAllBtn"
+          class="btn btn-link btn-sm text-decoration-none"
+        >
+          Collapse All
+        </button>
+      </div>
+      <!-- NEW: Frequency selector for pending jobs -->
+      <div class="d-flex align-items-center mb-3">
+        <label for="pendingUpdateFrequency" class="form-label me-2 mb-0">Update Every:</label>
+        <select
+          id="pendingUpdateFrequency"
+          class="form-select form-select-sm"
+          style="width: auto;"
+        >
+          <option value="3000" selected>3 seconds</option>
+          <option value="10000">10 seconds</option>
+          <option value="30000">30 seconds</option>
+          <option value="60000">1 minute</option>
+        </select>
+      </div>
+
+      <div id="treeContainer"></div>
+
+      <hr />
+
+      <h2>Active Triggers</h2>
+      <ul id="triggerList" class="list-group"></ul>
+
+      <hr />
+
+      <!-- ACTIVE JOBS SECTION -->
+      <h2 class="mb-2">Active Jobs</h2>
+      <!-- Frequency Selector + Timer Controls -->
+      <div class="d-flex align-items-center mb-3">
+        <label for="updateFrequency" class="form-label me-2 mb-0"
+          >Update Every:</label
+        >
+        <select
+          id="updateFrequency"
+          class="form-select form-select-sm"
+          style="width: auto;"
+        >
+          <option value="1000">1 second</option>
+          <option value="3000" selected>3 seconds</option>
+          <option value="5000">5 seconds</option>
+          <option value="10000">10 seconds</option>
+          <option value="60000">1 minute</option>
+        </select>
+      </div>
+      <ul id="activeJobsList" class="list-group mb-3"></ul>
+
+      <hr />
+
+      <!-- RESULTS SECTION (Success + Failed) -->
+      <h2>Job Results</h2>
+
+      <!-- Results search + refresh button -->
+      <div class="row mb-3">
+        <!-- Left side: search filter -->
+        <div class="col-sm-6">
+          <label for="resultsSearch" class="form-label">Search Filter (Results):</label>
+          <input
+            type="text"
+            class="form-control"
+            id="resultsSearch"
+            placeholder="Search by file name, tags, date, etc."
+          />
+        </div>
+
+        <!-- Right side: frequency + refresh button -->
+        <div class="col-sm-6 d-flex align-items-end justify-content-end">
+          <label for="resultsUpdateFrequency" class="form-label me-2 mb-0">
+            Update Every:
+          </label>
+          <select
+            id="resultsUpdateFrequency"
+            class="form-select form-select-sm me-2"
+            style="width: auto;"
+          >
+            <option value="0">Manual Only</option>
+            <option value="5000">5 seconds</option>
+            <option value="10000" selected>10 seconds</option>
+            <option value="30000">30 seconds</option>
+            <option value="60000">1 minute</option>
+          </select>
+
+          <button id="refreshResultsBtn" class="btn btn-secondary">
+            Refresh Results
+          </button>
+        </div>
+      </div>
+
+
+      <!-- Results table -->
+      <div class="table-responsive">
+        <table id="resultsTable" class="table table-sm table-bordered align-middle">
+          <thead class="table-light">
+            <tr>
+              <th>File Name</th>
+              <th>Status</th>
+              <th>Started</th>
+              <th>Finished</th>
+              <th>Duration (ms)</th>
+              <th>Tags</th>
+              <th>Function(s)</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <hr />
+
+      <!-- SCHEDULE NEW JOB SECTION -->
+      <div class="mt-5">
+        <h1>Schedule a Multi-Step Job</h1>
+
+        <!-- Scheduler Options (JSON) -->
+        <div class="card mb-3">
+          <div class="card-header">Scheduler Options (JSON)</div>
+          <div class="card-body">
+            <textarea
+              id="schedulerOptions"
+              class="form-control"
+              rows="2"
+            >{ "maxTriggers": 10 }
+            </textarea>
+          </div>
+        </div>
+
+        <!-- Steps container -->
+        <div class="card mb-3">
+          <div class="card-header">Steps</div>
+          <div class="card-body" id="stepsContainer">
+            <!-- Rows are appended here by addStepRow() -->
+          </div>
+          <div class="card-footer">
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="addStepBtn">
+              + Add Step
+            </button>
+          </div>
+        </div>
+
+        <!-- Schedule Job Button -->
+        <button type="button" class="btn btn-primary" id="scheduleJobBtn">
+          Schedule Job
+        </button>
+      </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div
+      id="toastContainer"
+      class="toast-container position-fixed bottom-0 end-0 p-3"
+    ></div>
+
+    <!-- jQuery (via CDN) -->
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.4/dist/jquery.min.js"></script>
+    <!-- Bootstrap 5 JS (via CDN) -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+      // ---------------------------
+      //  A. Toast Helper
+      // ---------------------------
+      function showToast(message, variant = 'info') {
+        const $toastContainer = $('#toastContainer');
+        const id = 'toast-' + Date.now();
+        const $toast = $(`
+          <div
+            id="${id}"
+            class="toast align-items-center text-bg-${variant} border-0"
+            role="alert"
+            aria-live="assertive"
+            aria-atomic="true"
+            data-bs-delay="4000"
+          >
+            <div class="d-flex">
+              <div class="toast-body">
+                ${message}
+              </div>
+              <button
+                type="button"
+                class="btn-close btn-close-white me-2 m-auto"
+                data-bs-dismiss="toast"
+                aria-label="Close"
+              ></button>
+            </div>
+          </div>
+        `);
+        $toastContainer.append($toast);
+        const toastObj = new bootstrap.Toast($toast[0]);
+        toastObj.show();
+      }
+
+      // ---------------------------
+      //  B. Model Class
+      // ---------------------------
+      class QueueModel {
+        getUserRole() {
+          return new Promise((resolve, reject) => {
+            google.script.run
+              .withSuccessHandler(resolve)
+              .withFailureHandler(reject)
+              .getUserRoleServer();
+          });
+        }
+        getQueueData() {
+          return new Promise((resolve, reject) => {
+            google.script.run
+              .withSuccessHandler(resolve)
+              .withFailureHandler(reject)
+              .getQueueData();
+          });
+        }
+        deleteResultItem(fileName) {
+          return new Promise((resolve, reject) => {
+            google.script.run
+              .withSuccessHandler(resolve)
+              .withFailureHandler(err => reject(new Error(err)))
+              .deleteResultItem(fileName);
+          });
+        }
+        deleteQueueItem(fileName) {
+          return new Promise((resolve, reject) => {
+            google.script.run
+              .withSuccessHandler(resolve)
+              .withFailureHandler(err => reject(new Error(err)))
+              .deleteQueueItem(fileName);
+          });
+        }
+        getActiveTriggers() {
+          return new Promise((resolve, reject) => {
+            google.script.run
+              .withSuccessHandler(resolve)
+              .withFailureHandler(reject)
+              .getActiveTriggers();
+          });
+        }
+        listAvailableFunctions() {
+          return new Promise((resolve, reject) => {
+            google.script.run
+              .withSuccessHandler(resolve)
+              .withFailureHandler(reject)
+              .listAvailableGlobalFunctions();
+          });
+        }
+        scheduleJobChain(steps, schedulerOptions) {
+          return new Promise((resolve, reject) => {
+            google.script.run
+              .withSuccessHandler(resolve)
+              .withFailureHandler(reject)
+              .scheduleJobChain(steps, schedulerOptions);
+          });
+        }
+        getAllActiveJobs() {
+          return new Promise((resolve, reject) => {
+            google.script.run
+              .withSuccessHandler(resolve)
+              .withFailureHandler(reject)
+              .getAllActiveJobs();
+          });
+        }
+        cancelActiveJob(triggerId) {
+          return new Promise((resolve, reject) => {
+            google.script.run
+              .withSuccessHandler(resolve)
+              .withFailureHandler(reject)
+              .cancelActiveJob(triggerId);
+          });
+        }
+        getResultsData() {
+          return new Promise((resolve, reject) => {
+            google.script.run
+              .withSuccessHandler(resolve)
+              .withFailureHandler(reject)
+              .getResultsData();
+          });
+        }
+      }
+
+      // ---------------------------
+      //  C. View Class
+      // ---------------------------
+      class QueueView {
+        constructor() {
+          // Basic references
+          this.$userRoleInfo = $('#userRoleInfo');
+          this.$treeContainer = $('#treeContainer');
+          this.$triggerList = $('#triggerList');
+          this.$searchInput = $('#searchInput');
+          this.$activeJobsList = $('#activeJobsList');
+          this.$expandAllBtn = $('#expandAllBtn');
+          this.$collapseAllBtn = $('#collapseAllBtn');
+
+          // Results UI
+          this.$resultsSearch = $('#resultsSearch');
+          this.$refreshResultsBtn = $('#refreshResultsBtn');
+          this.$resultsTableBody = $('#resultsTable tbody');
+
+          // We do not have a single #functionSelect anymore, since each row has its own dropdown
+        }
+
+        renderUserRole(role) {
+          this.$userRoleInfo.text(
+            `Your role: ${role.name}. Permissions: ${role.permissions.join(', ')}`
+          );
+          this.canDelete = role.permissions.includes('DELETE_QUEUE');
+        }
+
+        // ====== QUEUE (PENDING JOBS) ======
+        renderQueue(queueItems, canDelete, filterText) {
+          this.$treeContainer.empty();
+          const grouped = {};
+          queueItems.forEach(item => {
+            const date = item.createdDate || 'Unknown Date';
+            if (!grouped[date]) grouped[date] = {};
+            item.functionNames.forEach(fn => {
+              if (!grouped[date][fn]) grouped[date][fn] = {};
+              const tagKey = item.tags && item.tags.length ? item.tags.join(', ') : 'No Tags';
+              if (!grouped[date][fn][tagKey]) grouped[date][fn][tagKey] = [];
+              grouped[date][fn][tagKey].push(item);
+            });
+          });
+
+          const dateKeys = Object.keys(grouped).sort();
+          dateKeys.forEach(dateKey => {
+            const $dateBlock = this.createCollapsibleBlock(dateKey, true);
+            const fnMap = grouped[dateKey];
+            Object.keys(fnMap).forEach(fnName => {
+              const $fnBlock = this.createCollapsibleBlock(fnName, true);
+              const tagMap = fnMap[fnName];
+
+              Object.keys(tagMap).forEach(tagKey => {
+                const $tagBlock = this.createCollapsibleBlock(`Tags: ${tagKey}`, true);
+                const items = tagMap[tagKey];
+
+                items.forEach(item => {
+                  if (this.passesFilter(item, filterText)) {
+                    const $itemRow = this.createJobDetailRow(item, canDelete);
+                    $tagBlock.find('.tree-group').first().append($itemRow);
+                  }
+                });
+
+                if ($tagBlock.find('.tree-group').children().length > 0) {
+                  $fnBlock.find('.tree-group').first().append($tagBlock);
+                }
+              });
+              if ($fnBlock.find('.tree-group').children().length > 0) {
+                $dateBlock.find('.tree-group').first().append($fnBlock);
+              }
+            });
+            if ($dateBlock.find('.tree-group').children().length > 0) {
+              this.$treeContainer.append($dateBlock);
+            }
+          });
+        }
+        createJobDetailRow(item, canDelete) {
+          const $row = $('<div class="mb-2">');
+          // Create a container for the file info + delete button
+          const $fileLine = $('<div class="d-flex align-items-center">');
+
+          const $fileLink = $('<a>')
+            .attr('href', 'https://drive.google.com/file/d/' + item.fileId + '/view?usp=sharing')
+            .attr('target', '_blank')
+            .text(item.fileName);
+
+          const $info = $('<span>').append('File: ').append($fileLink);
+          const $deleteBtn = $('<button>')
+            .addClass('btn btn-danger btn-sm ms-2')
+            .text('Delete')
+            .prop('disabled', !canDelete)
+            .on('click', () => {
+              if (!confirm(`Delete ${item.fileName}?`)) return;
+              $(document).trigger('deleteItemRequested', item.fileName);
+            });
+
+          $fileLine.append($info).append($deleteBtn);
+          $row.append($fileLine);
+
+          // If you want to show job steps afterwards:
+          if (Array.isArray(item.steps) && item.steps.length > 0) {
+            const $stepsBlock = $('<div class="ms-3 mt-1">');
+            $stepsBlock.append($('<div class="fw-bold">').text('Steps:'));
+            item.steps.forEach((step, idx) => {
+              const { functionPath, parameters } = step;
+              const paramJson = JSON.stringify(parameters);
+              $stepsBlock.append($('<div>').text(`#${idx + 1}: ${functionPath}(${paramJson})`));
+            });
+            $row.append($stepsBlock);
+          }
+
+          return $row;
+        }
+        passesFilter(item, filterText) {
+          if (!filterText) return true;
+          const lower = filterText.toLowerCase();
+          const combinedStr = [
+            item.fileName,
+            item.createdDate,
+            ...(item.functionNames || []),
+            ...(item.tags || [])
+          ].join(' ').toLowerCase();
+          return combinedStr.includes(lower);
+        }
+
+        // ====== TRIGGERS ======
+        renderTriggers(triggers) {
+          this.$triggerList.empty();
+          if (triggers.length === 0) {
+            this.$triggerList.append('<li class="list-group-item">No active triggers</li>');
+            return;
+          }
+          triggers.forEach(t => {
+            const text = `ID: ${t.id} | Handler: ${t.functionName} | Type: ${t.type}`;
+            this.$triggerList.append($('<li class="list-group-item">').text(text));
+          });
+        }
+
+        // ====== ACTIVE JOBS ======
+        renderActiveJobs(jobsMap, canCancel) {
+          this.$activeJobsList.empty();
+          const triggerIds = Object.keys(jobsMap);
+
+          if (triggerIds.length === 0) {
+            this.$activeJobsList.append(
+              '<li class="list-group-item">No active jobs found</li>'
+            );
+            return;
+          }
+
+          triggerIds.forEach(tid => {
+            const job = jobsMap[tid];
+            const $li = $('<li class="list-group-item d-flex align-items-center">');
+            const jobInfoText = `TriggerId: ${tid} | File: ${
+              job.jobFileName
+            } | Step: ${job.currentFunction || '(not started yet)'}`;
+            const $info = $('<span class="flex-grow-1">').text(jobInfoText);
+
+            // local time + "time since"
+            const startTimeStr = this.formatTimeSinceLocal(job.startedTime);
+            const $small = $('<small class="text-muted ms-2">').text(startTimeStr);
+            $info.append($small);
+
+            $li.append($info);
+
+            if (canCancel && !job.cancelRequested) {
+              const $btn = $('<button class="btn btn-warning btn-sm ms-2">')
+                .text('Cancel')
+                .on('click', () => {
+                  $(document).trigger('cancelJobRequested', tid);
+                });
+              $li.append($btn);
+            } else if (job.cancelRequested) {
+              $li.append('<span class="badge bg-secondary ms-2">Cancel Requested</span>');
+            }
+
+            this.$activeJobsList.append($li);
+          });
+        }
+        formatTimeSinceLocal(startTimeStr) {
+          if (!startTimeStr) return '';
+          const start = new Date(startTimeStr);
+          if (isNaN(start.getTime())) return '';
+          const now = new Date();
+          const diffMs = now - start;
+          if (diffMs < 0) return '(starts in future) ' + start.toLocaleString();
+
+          const sec = Math.floor(diffMs / 1000);
+          let unit = 's';
+          let value = sec;
+          if (sec >= 60) {
+            const min = Math.floor(sec / 60);
+            if (min >= 60) {
+              const hr = Math.floor(min / 60);
+              if (hr >= 24) {
+                const days = Math.floor(hr / 24);
+                value = days;
+                unit = 'd';
+              } else {
+                value = hr;
+                unit = 'h';
+              }
+            } else {
+              value = min;
+              unit = 'm';
+            }
+          }
+          return `${value}${unit} ago (${start.toLocaleString()})`;
+        }
+
+        // ====== RESULTS (Success + Failed) ======
+        renderResults(resultsArray, filterText) {
+          this.$resultsTableBody.empty();
+          if (!resultsArray || resultsArray.length === 0) {
+            this.$resultsTableBody.append(
+              '<tr><td colspan="7" class="text-muted">No results found.</td></tr>'
+            );
+            return;
+          }
+
+          const filtered = resultsArray.filter(r => this.passesResultsFilter(r, filterText));
+          if (filtered.length === 0) {
+            this.$resultsTableBody.append(
+              '<tr><td colspan="7" class="text-warning">No matching results.</td></tr>'
+            );
+            return;
+          }
+
+          filtered.forEach(r => {
+            const meta = r.metadata || {};
+            const originalJob = meta.originalJob || {};
+            const tags = (originalJob.tags || []).join(', ');
+            const started = meta.started || meta.created;
+            const finished = meta.finishedAt || meta.failedAt;
+            const duration = meta.duration || '';
+            const status = r.success ? 'Success' : 'Failed';
+            const fnList = Array.isArray(r.functionNames) ? r.functionNames.join(', ') : '';
+
+            const row = `
+              <tr>
+                <td>
+                  <a href="https://drive.google.com/file/d/${r.fileId}/view?usp=sharing" 
+                     target="_blank" class="text-decoration-none">
+                    ${r.fileName}
+                  </a>
+                  ${
+                    // If user can delete results, show a delete button
+                    this.canDelete
+                      ? `<button class="btn btn-danger btn-sm ms-2 delete-result-btn"
+                               data-filename="${r.fileName}">
+                           Delete
+                         </button>`
+                      : ''
+                  }
+                </td>
+                <td>${status}</td>
+                <td>${started || ''}</td>
+                <td>${finished || ''}</td>
+                <td>${duration}</td>
+                <td>${tags}</td>
+                <td>${fnList}</td>
+              </tr>
+            `;
+            this.$resultsTableBody.append(row);
+          });
+        }
+        passesResultsFilter(resItem, filterText) {
+          if (!filterText) return true;
+          const lower = filterText.toLowerCase();
+          const meta = resItem.metadata || {};
+          const originalJob = meta.originalJob || {};
+          const tags = (originalJob.tags || []).join(' ');
+          const combinedStr = [
+            resItem.fileName,
+            meta.started,
+            meta.finishedAt,
+            meta.failedAt,
+            tags
+          ]
+            .filter(Boolean)
+            .join(' ')
+            .toLowerCase();
+          return combinedStr.includes(lower);
+        }
+
+        // ====== Utility ======
+        createCollapsibleBlock(label, expanded = false) {
+          const $container = $('<div class="mb-2">');
+          const $icon = $('<span class="expand-icon me-1">').text(expanded ? '▼' : '▶');
+          const $header = $('<div class="toggle-header fw-bold d-flex align-items-center">')
+            .append($icon)
+            .append($('<span>').text(label))
+            .on('click', () => {
+              const $group = $container.find('.tree-group').first();
+              const hidden = $group.hasClass('hidden');
+              $group.toggleClass('hidden', !hidden);
+              $icon.text(hidden ? '▼' : '▶');
+            });
+          const $group = $('<div class="tree-group">').toggleClass('hidden', !expanded);
+          $container.append($header).append($group);
+          return $container;
+        }
+      }
+
+      // ---------------------------
+      //  D. Step Row Generator
+      // ---------------------------
+      /**
+       * Generates HTML for a single step row:
+       * - Dropdown for function name (populated from availableFunctionNames)
+       * - Textarea for JSON arguments
+       * - Remove (X) button
+       * @param {string[]} fnList 
+       * @returns {string} HTML snippet
+       */
+      function generateStepRowHtml(fnList) {
+        // Build <option> list
+        let optionsHtml = '<option value="">-- Select Function --</option>';
+        fnList.forEach(fn => {
+          optionsHtml += `<option value="${fn}">${fn}</option>`;
+        });
+
+        const uniqueId = 'step-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
+        return `
+          <div class="row g-2 align-items-center mb-2 step-row" data-step-id="${uniqueId}">
+            <div class="col-md-4">
+              <select class="form-select step-function">
+                ${optionsHtml}
+              </select>
+            </div>
+            <div class="col-md-6">
+              <textarea class="form-control step-args" rows="1" placeholder='["arg1","arg2"]'></textarea>
+            </div>
+            <div class="col-md-2 text-end">
+              <button type="button" class="btn btn-danger remove-step-btn">X</button>
+            </div>
+          </div>
+        `;
+      }
+
+      // Global map: { [key: string]: number }, storing setTimeout IDs
+      const pollRegistry = {};
+
+      $(document).ready(async () => {
+        const model = new QueueModel();
+        const view = new QueueView();
+
+        // 1) Get user role
+        let role = null;
+        try {
+          role = await model.getUserRole();
+          view.renderUserRole(role);
+        } catch (e) {
+          showToast(`Failed to get user role: ${e.message}`, 'danger');
+          return;
+        }
+
+        const canDelete = role.permissions.includes('DELETE_QUEUE');
+        const canSchedule = role.permissions.includes('SCHEDULE_JOBS');
+        const canCancelJobs = canDelete; // or separate permission if needed
+
+        // 2) Load queue data + triggers, render them
+        let queueData = [];
+        let triggers = [];
+        try {
+          queueData = await model.getQueueData();
+          triggers = await model.getActiveTriggers();
+        } catch (e) {
+          showToast(`Failed to get data: ${e.message}`, 'danger');
+        }
+        view.renderQueue(queueData, canDelete, '');
+        view.renderTriggers(triggers);
+
+        // 3) Hook up search filter for queue
+        view.$searchInput.on('input', () => {
+          const filter = view.$searchInput.val().trim();
+          view.renderQueue(queueData, canDelete, filter);
+        });
+
+        // 4) Deletion from queue
+        $(document).on('deleteItemRequested', async (e, fileName) => {
+          if (!canDelete) return;
+          try {
+            const msg = await model.deleteQueueItem(fileName);
+            showToast(msg, 'success');
+            queueData = await model.getQueueData();
+            view.renderQueue(queueData, canDelete, view.$searchInput.val().trim());
+          } catch (err) {
+            showToast(`Delete failed: ${err.message}`, 'danger');
+          }
+        });
+
+        // 5) Results: hooking up delete
+        view.$resultsTableBody.on('click', '.delete-result-btn', function () {
+          if (!canDelete) return;
+          const fileName = $(this).data('filename');
+          if (!confirm(`Delete ${fileName}?`)) return;
+          $(document).trigger('deleteResultItemRequested', fileName);
+        });
+        $(document).on('deleteResultItemRequested', async (e, fileName) => {
+          try {
+            const msg = await model.deleteResultItem(fileName);
+            showToast(msg, 'success');
+            await refreshResults();
+          } catch (err) {
+            showToast(`Delete result failed: ${err.message}`, 'danger');
+          }
+        });
+
+        // 6) Scheduling (if permitted)
+        let availableFunctionNames = [];
+        if (canSchedule) {
+          // fetch function list once
+          try {
+            availableFunctionNames = await model.listAvailableFunctions();
+          } catch (err) {
+            showToast(`Failed to list global functions: ${err.message}`, 'danger');
+          }
+
+          // Add initial row
+          $('#stepsContainer').append(generateStepRowHtml(availableFunctionNames));
+
+          // Add step
+          $('#addStepBtn').on('click', function() {
+            $('#stepsContainer').append(generateStepRowHtml(availableFunctionNames));
+          });
+
+          // Remove step
+          $('#stepsContainer').on('click', '.remove-step-btn', function() {
+            $(this).closest('.step-row').remove();
+          });
+
+          // On schedule
+          $('#scheduleJobBtn').on('click', async function() {
+            const $btn = $(this);
+            $btn.prop('disabled', true); // disable during scheduling
+
+            try 
+            {
+              const steps = [];
+              const rows = $('#stepsContainer .step-row');
+              if (!rows.length) {
+                alert('At least one step is required.');
+                return;
+              }
+
+              rows.each((index, rowEl) => {
+                const fnName = $(rowEl).find('.step-function').val().trim();
+                const argsText = $(rowEl).find('.step-args').val().trim();
+
+                if (!fnName) {
+                  throw new Error(`Row #${index + 1} missing function name`);
+                }
+
+                let parsedArgs = [];
+                if (argsText) {
+                  try {
+                    parsedArgs = JSON.parse(argsText);
+                    if (!Array.isArray(parsedArgs)) {
+                      throw new Error("Arguments must be an array");
+                    }
+                  } catch (parseErr) {
+                    throw new Error(`Row #${index + 1} invalid JSON: ${parseErr.message}`);
+                  }
+                }
+
+                // Determine step type
+                let stepType;
+                if (fnName === 'withOptions') {
+                  stepType = 'withOptions';
+                } else if (index === 0) {
+                  stepType = 'create';
+                } else {
+                  stepType = 'thenAfter';
+                }
+
+                const stepDef = { type: stepType };
+                if (stepType === 'withOptions') {
+                  if (parsedArgs.length !== 1 || typeof parsedArgs[0] !== 'object') {
+                    throw new Error(`withOptions step expects a single object argument (e.g. [{}])`);
+                  }
+                  stepDef.options = parsedArgs[0];
+                } else {
+                  stepDef.functionPath = fnName;
+                  stepDef.args = parsedArgs;
+                }
+                steps.push(stepDef);
+              });
+
+              // Scheduler Options
+              let schedulerOptions = {};
+              const rawOpts = $('#schedulerOptions').val().trim();
+              if (rawOpts) {
+                try {
+                  schedulerOptions = JSON.parse(rawOpts);
+                } catch (err) {
+                  alert(`Invalid scheduler options:\n${err.message}`);
+                  return;
+                }
+              }
+
+              // Perform scheduling
+              const result = await model.scheduleJobChain(steps, schedulerOptions);
+              if (result && result.status === 'success') {
+                // success toast
+                showToast(`Job scheduled successfully! File: ${result.fileName}, Trigger: ${result.triggerId}`, 'success');
+              } else {
+                // unexpected response
+                showToast(`Scheduling returned unexpected result: ${JSON.stringify(result)}`, 'warning');
+              }
+            } catch (err) {
+              console.error('Scheduling error:', err);
+              showToast(`Error scheduling job: ${err.message}`, 'danger');
+            }
+            finally
+            {
+              $btn.prop('disabled', false); // re-enable no matter success/fail
+            }
+          });
+        } else {
+          // If user can't schedule, hide that section
+          $('.mt-5').addClass('hidden'); // the schedule section
+        }
+        
+
+        /**
+         * Sets up (or re-sets) a polling loop for a given key.
+         * - Cancels any existing poll timer for that key
+         * - Immediately calls the callback once, and on completion schedules the next call
+         *
+         * @param {string}   key        A unique identifier for this poll (e.g. "pendingJobs")
+         * @param {Function} callback   An async function to call each cycle
+         * @param {number}   frequency  How often to run in ms (0 means disable polling)
+         */
+        function schedulePoll(key, callback, frequency) {
+          // 1. If there's already a timer for this key, clear it
+          if (pollRegistry[key]) {
+            clearTimeout(pollRegistry[key]);
+            delete pollRegistry[key];
+          }
+
+          // 2. If frequency is 0 or negative, we skip scheduling
+          if (frequency <= 0) {
+            return;
+          }
+
+          // 3. Define a small inner "loop" function
+          async function pollOnce() {
+            try {
+              // a) Run the callback
+              await callback();
+            } catch (err) {
+              console.error(`Error in scheduled poll "${key}":`, err);
+            } finally {
+              // b) Schedule the next call, if still desired
+              //    We store the timer ID in pollRegistry[key]
+              pollRegistry[key] = setTimeout(pollOnce, frequency);
+            }
+          }
+
+          // 4. Kick off the first run
+          pollOnce();
+        }
+
+
+        // 7) Active jobs polling
+        async function refreshActiveJobs() {
+          try {
+            const jobsMap = await model.getAllActiveJobs();
+            view.renderActiveJobs(jobsMap, canCancelJobs);
+          } catch (err) {
+            console.warn('Failed to getAllActiveJobs:', err);
+          }
+        }
+
+        const fnStartActivePolling = () => { 
+          schedulePoll('activeJobs', refreshActiveJobs , parseInt($('#updateFrequency').val() || '3000') );
+        } ;
+
+        $('#updateFrequency').on('change', fnStartActivePolling);
+        fnStartActivePolling(); 
+
+        // 8) Cancel job event
+        $(document).on('cancelJobRequested', async (e, triggerId) => {
+          if (!confirm(`Cancel running job with trigger ID=${triggerId}?`)) return;
+          try {
+            await model.cancelActiveJob(triggerId);
+            showToast(`Cancellation requested for triggerId=${triggerId}`, 'info');
+          } catch (err) {
+            showToast(`Failed to cancel job: ${err.message}`, 'danger');
+          }
+        });
+
+        // 9) Expand/Collapse all
+        view.$expandAllBtn.on('click', () => {
+          $('.tree-group').removeClass('hidden');
+          $('.toggle-header .expand-icon').text('▼');
+        });
+        view.$collapseAllBtn.on('click', () => {
+          $('.tree-group').addClass('hidden');
+          $('.toggle-header .expand-icon').text('▶');
+        });
+
+        // 10) Load initial results
+        let resultsCache = [];
+        async function refreshResults() {
+          try {
+            resultsCache = await model.getResultsData();
+            const filter = view.$resultsSearch.val().trim();
+            view.renderResults(resultsCache, filter);
+          } catch (err) {
+            console.error('Failed to getResultsData:', err);
+            showToast(`Failed to load results: ${err.message}`, 'danger');
+          }
+        }
+
+        async function refreshQueueData() {
+          try {
+            const queueData = await model.getQueueData();
+            // render with filter, etc.
+            view.renderQueue(queueData, /* canDelete= */ true, view.$searchInput.val());
+          } catch (err) {
+            console.warn('Failed to refresh queue:', err);
+          }
+        }
+
+        // 
+        // Pending jobs
+        //
+        const fnStartPendingPolling = () => { 
+          schedulePoll('pendingJobs', refreshQueueData , parseInt($('#pendingUpdateFrequency').val() || '3000') );
+        } ;
+
+        $('#pendingUpdateFrequency').on('change', fnStartPendingPolling);
+        fnStartPendingPolling(); 
+
+        // 
+        // Job Results 
+        //
+        const fnStartResultsPolling = () => { 
+          schedulePoll('jobResults', refreshResults , parseInt($('#resultsUpdateFrequency').val() || '3000') );
+        } ;
+
+        $('#resultsUpdateFrequency').on('change', fnStartResultsPolling);
+        fnStartResultsPolling(); 
+
+        // Hook up results search
+        view.$resultsSearch.on('input', () => {
+          const filter = view.$resultsSearch.val().trim();
+          view.renderResults(resultsCache, filter);
+        });
+
+      });
+    </script>
+  </body>
+</html>
